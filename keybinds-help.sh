@@ -15,9 +15,10 @@ describe() {
   "wezterm|cmd+R") echo "nvim :source current file" ;;
   "wezterm|opt+h" | "wezterm|opt+j" | "wezterm|opt+k" | "wezterm|opt+l") echo "passthrough to tmux: pane nav" ;;
   "wezterm|opt+shift+h" | "wezterm|opt+shift+j" | "wezterm|opt+shift+k" | "wezterm|opt+shift+l") echo "passthrough to tmux: pane resize" ;;
-  "tmux|prefix+K") echo "sesh session picker (gum popup)" ;;
+  "tmux|prefix+K") echo "agent session switcher: claude-code + opencode (fzf popup, cmd+k)" ;;
   "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (gum popup)" ;;
   "tmux|prefix+B") echo "wallpaper picker" ;;
+  "tmux|prefix+a") echo "sesh session picker (gum popup)" ;;
   "tmux|prefix+P") echo "toggle directory path in status bar" ;;
   "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf)" ;;
   "tmux|prefix+g") echo "winmgr mode: h/l swap, j/k prev/next, r rename, n renumber, f menu, q quit" ;;
