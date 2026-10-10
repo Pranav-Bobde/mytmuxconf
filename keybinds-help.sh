@@ -15,7 +15,7 @@ describe() {
   "wezterm|cmd+R") echo "nvim :source current file" ;;
   "wezterm|opt+h" | "wezterm|opt+j" | "wezterm|opt+k" | "wezterm|opt+l") echo "passthrough to tmux: pane nav" ;;
   "wezterm|opt+shift+h" | "wezterm|opt+shift+j" | "wezterm|opt+shift+k" | "wezterm|opt+shift+l") echo "passthrough to tmux: pane resize" ;;
-  "tmux|prefix+K") echo "agent session switcher: claude-code + opencode (fzf popup, cmd+k)" ;;
+  "tmux|prefix+K") echo "agent session switcher: claude-code + opencode + Pi (fzf popup, cmd+k)" ;;
   "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (gum popup)" ;;
   "tmux|prefix+B") echo "wallpaper picker" ;;
   "tmux|prefix+a") echo "sesh session picker (gum popup)" ;;

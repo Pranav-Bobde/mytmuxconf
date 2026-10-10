@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agent-switcher.sh — fuzzy-find running claude-code and opencode instances
+# agent-switcher.sh — fuzzy-find running claude-code, opencode and Pi instances
 # across tmux panes by thread name and jump to them. Bound to prefix+K.
 #
 # Data sources:
@@ -9,15 +9,19 @@
 #   opencode
 #     tmux pane title "OC | <title>"  — the session currently open in that pane
 #     ~/.local/share/opencode/opencode.db — session id, status, transcript
+#   Pi
+#     pi-extension.ts — live TUI metadata in $XDG_CACHE_HOME/tmux-agent-switcher/pi
+#     exact session JSONL + active leaf — title, status, branch-aware preview
+#     live foreground Pi process — pane-only fallback until /reload
 #
-# Tabs: 1 All · 2 Claude · 3 OpenCode (digits switch tabs while the query is
-# empty, tab/shift-tab cycle). The initial tab follows the invoking pane: a
-# claude pane opens on Claude, an opencode pane on OpenCode, anything else All.
+# Tabs: 1 All · 2 Claude · 3 OpenCode · 4 Pi (digits switch tabs while the query
+# is empty, tab/shift-tab cycle). The initial tab follows the invoking agent.
 #
 # Usage:
 #   agent-switcher.sh                  interactive fzf picker (run inside tmux or a popup)
 #   agent-switcher.sh --list           print candidate rows (debugging)
-#   agent-switcher.sh --preview <kind> <sessionId>   transcript preview (used by fzf)
+#   agent-switcher.sh --preview <kind> <sessionRef>  transcript preview (used by fzf)
+#     sessionRef is a session ID for cc/oc, a live metadata file for Pi
 #
 # Internal (called back by fzf): --rows <kind>, --tab <n|next|prev>, --key <n>
 
@@ -27,10 +31,11 @@ SELF="$0"
 SESS_DIR="$HOME/.claude/sessions"
 PROJECTS_DIR="$HOME/.claude/projects"
 OC_DB="$HOME/.local/share/opencode/opencode.db"
+PI_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-agent-switcher/pi"
 
-KINDS=(all cc oc)
-NAMES=(All Claude OpenCode)
-PROMPTS=('  all ❯ ' '  claude ❯ ' '  opencode ❯ ')
+KINDS=(all cc oc pi)
+NAMES=(All Claude OpenCode Pi)
+PROMPTS=('  all ❯ ' '  claude ❯ ' '  opencode ❯ ' '  pi ❯ ')
 
 ocq() { sqlite3 -readonly -separator $'\t' "$OC_DB" "$@" 2>/dev/null; }
 sqlstr() { local s=${1//\'/\'\'}; printf "'%s'" "$s"; }
@@ -38,6 +43,35 @@ sqlstr() { local s=${1//\'/\'\'}; printf "'%s'" "$s"; }
 # ---------------------------------------------------------------- preview mode
 if [[ "${1:-}" == "--preview" ]]; then
   kind="${2:-}" sid="${3:-}"
+  if [[ "$kind" == "pi" ]]; then
+    [[ -z "$sid" ]] && { echo "Run /reload in this Pi pane to enable its session preview."; exit 0; }
+    # Read one atomic snapshot so a session switch cannot mix its file and leaf.
+    f="" leaf=""
+    {
+      IFS= read -r -d '' f
+      IFS= read -r -d '' leaf
+    } < <(jq -j '(.sessionFile // ""), "\u0000", (.leafId // ""), "\u0000"' "$sid" 2>/dev/null)
+    [[ ! -r "$f" || -z "$leaf" ]] && { echo "no transcript yet (new or ephemeral session)"; exit 0; }
+    # Follow the recorded leaf, not the last physical entry: /tree can leave
+    # newer messages on an abandoned branch. Ignore an in-progress JSONL line.
+    jq -Rrs --arg leaf "$leaf" '
+      split("\n") | map(fromjson? | select(.type != "session" and .id != null))
+      | INDEX(.id) as $entries
+      | $entries[$leaf]
+      | [while(. != null; if .parentId == null then null else $entries[.parentId] end)]
+      | reverse | .[-80:][]
+      | select(.type == "message" and (.message.role == "user" or .message.role == "assistant"))
+      | .message.role as $role
+      | (.message.content
+         | if type == "string" then .
+           else ([.[]? | select(.type == "text") | .text] | join("\n")) end) as $text
+      | select($text != null and $text != "")
+      | (if $role == "user" then "\u001b[1;33m● you\u001b[0m"
+         else "\u001b[1;36m● pi\u001b[0m" end)
+        + "\n" + ($text | .[0:1500]) + "\n"
+    ' "$f" 2>/dev/null | tail -n 120
+    exit 0
+  fi
   [[ -z "$sid" ]] && { echo "no session yet"; exit 0; }
 
   if [[ "$kind" == "oc" ]]; then
@@ -90,7 +124,7 @@ filter_rows() {
 
 tab_label() {
   local active=$1 i out=""
-  for i in 0 1 2; do
+  for i in "${!KINDS[@]}"; do
     local n style=$'\033[2m'
     n=$(filter_rows "${KINDS[i]}" | wc -l | tr -d ' ')
     (( i == active )) && style=$'\033[1;30;45m'
@@ -113,8 +147,8 @@ case "${1:-}" in
   --tab)
     cur=$(cat "$SWITCHER_STATE" 2>/dev/null || echo 0)
     case "${2:-}" in
-      next) i=$(( (cur + 1) % 3 )) ;;
-      prev) i=$(( (cur + 2) % 3 )) ;;
+      next) i=$(( (cur + 1) % ${#KINDS[@]} )) ;;
+      prev) i=$(( (cur + ${#KINDS[@]} - 1) % ${#KINDS[@]} )) ;;
       *)    i=$(( ${2:-1} - 1 )) ;;
     esac
     tab_action "$i"
@@ -139,17 +173,21 @@ tmux info >/dev/null 2>&1 || { echo "agent-switcher: no tmux server running" >&2
 FROM_PANE="${SWITCHER_FROM:-$(tmux display -p '#{pane_id}' 2>/dev/null)}"
 
 # ------------------------------------------------------------ scan tmux panes
-# PANE: pane_pid -> pane_id, for mapping claude pids to panes. indexed array
+# PANE: pane_pid -> pane_id, for mapping agent pids to panes. indexed array
 # keyed by pid (numeric) — macOS ships bash 3.2, no declare -A.
 # OC_PANES: panes that look like an opencode TUI, resolved further below.
 PANE=()
 OC_PANES=""
-while IFS=$'\t' read -r ppid paneid pcmd cwd ptitle; do
+PI_PANES=""
+while IFS=$'\t' read -r ppid paneid pcmd cwd ptty ptitle; do
   PANE[$ppid]="$paneid"
   if [[ "$pcmd" == opencode* || "$ptitle" == "OC | "* ]]; then
     OC_PANES+="$paneid"$'\t'"$cwd"$'\t'"$ptitle"$'\n'
   fi
-done < <(tmux list-panes -a -F $'#{pane_pid}\t#{pane_id}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}')
+  if [[ "$pcmd" == node || "$pcmd" == pi || "$ptitle" == "π - "* ]]; then
+    PI_PANES+="$paneid"$'\t'"$cwd"$'\t'"$ptty"$'\t'"$ptitle"$'\n'
+  fi
+done < <(tmux list-panes -a -F $'#{pane_pid}\t#{pane_id}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_tty}\t#{pane_title}')
 
 short_path() {
   local p="$1"
@@ -157,8 +195,24 @@ short_path() {
   printf '%s' "$p"
 }
 
+# Pi records carry PIDs, never a trusted/inherited TMUX_PANE identity.
+pane_for_pid() {
+  local p="$1" depth
+  for (( depth=0; depth<64; depth++ )); do
+    [[ -z "$p" || "$p" == *[!0-9]* || "$p" -le 1 ]] && return 1
+    if [[ -n "${PANE[$p]:-}" ]]; then printf '%s' "${PANE[$p]}"; return 0; fi
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
+
+clean_title() {
+  printf '%s' "$1" | tr -d '\000-\010\013-\037\177' | tr '\t\n' '  '
+}
+
 TAG_CC=$'\033[38;5;173mcc\033[0m'
 TAG_OC=$'\033[38;5;110moc\033[0m'
+TAG_PI=$'\033[38;5;141mpi\033[0m'
 BUSY=$'\033[1;33m●\033[0m'
 
 # rows: kind \t updated \t paneid \t sid \t display \t cwd
@@ -234,12 +288,57 @@ if [[ -n "$OC_PANES" && -r "$OC_DB" ]] && command -v sqlite3 >/dev/null; then
   done <<<"${OC_PANES%$'\n'}"
 fi
 
+# ------------------------------------------------ Pi: exact live TUI records
+PI_SEEN="|"
+for f in "$PI_DIR"/*.json; do
+  [[ -r "$f" ]] || continue
+  if ! IFS=$'\t' read -r pid status title cwd updated started < <(jq -er '
+    select(.mode == "tui" and (.pid | type) == "number"
+      and (.cwd | type) == "string" and .cwd != ""
+      and (.processStartedAt | type) == "string" and .processStartedAt != "")
+    | [.pid, (.status // "idle"),
+       (if (.name // "") == "" then "(new session)" else .name end), .cwd, (.updatedAt // 0), .processStartedAt]
+    | map(if type == "string" then gsub("[[:cntrl:]]"; " ") else . end) | @tsv
+  ' "$f" 2>/dev/null); then continue; fi
+  [[ "$pid" == *[!0-9]* || "$pid" -le 1 || "$f" != "$PI_DIR/$pid.json" ]] && continue
+  kill -0 "$pid" 2>/dev/null || continue
+  pcmd=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d '[:space:]')
+  [[ "${pcmd##*/}" == pi ]] || continue
+  # A crashed Pi can leave a record whose PID later belongs to another Pi.
+  actual_start=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | awk '{$1=$1; print}')
+  [[ -n "$actual_start" && "$actual_start" == "$started" ]] || continue
+  paneid=$(pane_for_pid "$pid") || continue
+  [[ "$PI_SEEN" == *"|$paneid|"* ]] && continue
+  PI_SEEN+="$paneid|"
+  st=' '
+  [[ "$status" == "busy" ]] && st="$BUSY"
+  display=$(printf '%s %s \033[1m%s\033[0m' "$st" "$TAG_PI" "$(clean_title "$title")")
+  # Pi field 4 is the metadata reference, which includes the exact file + leaf.
+  rows+="pi"$'\t'"$updated"$'\t'"$paneid"$'\t'"$f"$'\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
+done
+
+# Existing Pi panes can be switched to before loading the extension. Require
+# a foreground Pi process on the pane TTY; a stale title or plain node is not Pi.
+if [[ -n "$PI_PANES" ]]; then
+  while IFS=$'\t' read -r paneid cwd ptty title; do
+    [[ "$PI_SEEN" == *"|$paneid|"* ]] && continue
+    [[ -n "$ptty" ]] || continue
+    ps -t "${ptty#/dev/}" -o stat=,comm= 2>/dev/null | awk '
+      $1 ~ /\+/ && $2 ~ /(^|\/)pi$/ { found=1 } END { exit !found }
+    ' || continue
+    title="${title#π - }"
+    [[ -n "$title" ]] || title="(Pi session)"
+    display=$(printf '  %s \033[1m%s\033[0m' "$TAG_PI" "$(clean_title "$title")")
+    rows+="pi"$'\t'"0"$'\t'"$paneid"$'\t\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
+  done <<<"${PI_PANES%$'\n'}"
+fi
+
 # most recently interacted first — fzf's default layout puts the first row at
 # the bottom, right next to the search bar
 rows=$(printf '%s' "$rows" | sort -t$'\t' -k2,2nr)
 
 if [[ -z "$rows" ]]; then
-  echo "no running claude-code or opencode instances found in tmux"
+  echo "no running claude-code, opencode or Pi instances found in tmux"
   read -r -n1 -s -p "press any key" 2>/dev/null || true
   exit 0
 fi
@@ -260,6 +359,7 @@ from_kind=$(awk -F'\t' -v p="$FROM_PANE" '$3 == p { print $1; exit }' "$SWITCHER
 case "$from_kind" in
   cc) tab=1 ;;
   oc) tab=2 ;;
+  pi) tab=3 ;;
 esac
 echo "$tab" >"$SWITCHER_STATE"
 
@@ -275,6 +375,7 @@ sel=$("$SELF" --rows "${KINDS[tab]}" | fzf \
   --bind="1:transform($SELF --key 1)" \
   --bind="2:transform($SELF --key 2)" \
   --bind="3:transform($SELF --key 3)" \
+  --bind="4:transform($SELF --key 4)" \
   --bind="tab:transform($SELF --tab next)" \
   --bind="shift-tab:transform($SELF --tab prev)" \
   --bind='focus:transform-header(echo wd: {6})' \
