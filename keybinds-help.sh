@@ -13,8 +13,8 @@ WEZ_CONF="$HOME/.config/wezterm/wezterm.lua"
 # Friendly labels for binds whose raw action text is unreadable. Keyed "src|key".
 describe() {
   case "$1" in
-  "wezterm|cmd+.") echo "nvim :ZenMode" ;;
-  "wezterm|cmd+[") echo "nvim jump list (ctrl+o / ctrl+i)" ;;
+  "wezterm|cmd+[") echo "nvim jump back (ctrl+o)" ;;
+  "wezterm|cmd+]") echo "nvim jump forward (ctrl+i)" ;;
   "wezterm|cmd+R") echo "nvim :source current file" ;;
   "wezterm|opt+h" | "wezterm|opt+j" | "wezterm|opt+k" | "wezterm|opt+l") echo "passthrough to tmux: pane nav" ;;
   "wezterm|opt+shift+h" | "wezterm|opt+shift+j" | "wezterm|opt+shift+k" | "wezterm|opt+shift+l") echo "passthrough to tmux: pane resize" ;;
