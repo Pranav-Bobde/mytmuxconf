@@ -57,3 +57,33 @@ Design notes:
 - fzf draws the border (the popup uses `-B`) so Tab can relabel it. Actions read the view back from `$FZF_BORDER_LABEL`.
 - The band is Catppuccin surface0 (`#313244`). Cell backgrounds render opaque over WezTerm's translucent wallpaper; darker shades read as a dark slab where the band crosses the wallpaper's bright areas.
 - macOS `/bin/bash` is 3.2: under `set -u` an empty array is unbound. Expand optional arrays as `${a[@]+"${a[@]}"}`.
+
+# Status bar
+
+The bar sits at the bottom with plain text on the terminal background: dim grey windows, the current one with a peach number and bold name, the session name on the right. Catppuccin was removed; `tmux.conf` hardcodes the six Mocha colors it used to set (messages, copy mode, pane borders, clock). `status-right` must keep continuum's `#(continuum_save.sh)` hook, or autosave stops.
+
+## Window list on Cmd hold
+
+The window list appears only while Cmd is held in WezTerm. Neither WezTerm nor tmux sees Cmd pressed alone, so a watcher outside the terminal does it:
+
+- `cmd-hold-watch` (Swift, LaunchAgent `xyz.pranavb.tmux-cmd-hold`, plist in `~/Library/LaunchAgents/`) polls the modifier state and frontmost app every 50 ms and runs `cmd-hold.sh on|off`. It only reads state and never intercepts key events, so other apps' global shortcuts keep working. About 0.3% CPU.
+- `cmd-hold.sh off` swaps `status-format[0]` for a blank line that still runs the continuum hook. `on` resets `status-format` to tmux's default. The row keeps its height, so panes never resize.
+
+Gotchas found while building it:
+
+- A Karabiner rule remapping Cmd to Cmd (to detect the hold) broke every global shortcut (Raycast, Winkshot) while WezTerm was focused. Don't go back to that.
+- `set -gu 'status-format[0]'` blanks that line instead of restoring the default. Unset the whole `status-format` option.
+- In tmux 3.7, `status-bg terminal` falls back to `status-style` (default `bg=green`). Set `status-style` explicitly.
+
+Install (the binary is built locally and git-ignored; the plist lives in `launchd/`):
+
+```bash
+swiftc -O -o ~/.config/tmux/cmd-hold-watch ~/.config/tmux/cmd-hold-watch.swift
+cp ~/.config/tmux/launchd/xyz.pranavb.tmux-cmd-hold.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/xyz.pranavb.tmux-cmd-hold.plist
+```
+
+```bash
+launchctl kickstart -k gui/$(id -u)/xyz.pranavb.tmux-cmd-hold   # restart after rebuilding
+launchctl bootout gui/$(id -u)/xyz.pranavb.tmux-cmd-hold        # stop and unload (delete the plist to uninstall)
+```
