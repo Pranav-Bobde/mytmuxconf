@@ -26,8 +26,8 @@
 # A pane is only ever rewritten when a live agent process is its pane root or a
 # direct child of it. That deliberately excludes an agent running nested inside
 # something else (e.g. claude in an nvim :terminal) — there the pane belongs to
-# nvim, and rewriting it would destroy the nvim entry that
-# @resurrect-strategy-nvim is meant to restore.
+# nvim, and rewriting it would destroy resurrect's saved `nvim` entry (which
+# restores the pane; lua/user/obsession.lua then reloads the session).
 
 set -uo pipefail
 
