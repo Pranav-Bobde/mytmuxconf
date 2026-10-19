@@ -18,10 +18,9 @@ describe() {
   "tmux|prefix+o") echo "session picker: tab toggles switch/create (popup, cmd+o)" ;;
   "tmux|prefix+K") echo "agent session switcher: claude-code + opencode + Pi (fzf popup, cmd+k)" ;;
   "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (gum popup)" ;;
-  "tmux|prefix+B") echo "wallpaper picker" ;;
   "tmux|prefix+a") echo "sesh session picker (gum popup)" ;;
   "tmux|prefix+P") echo "toggle directory path in status bar" ;;
-  "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf)" ;;
+  "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf): switch, move, rename, kill, wallpaper" ;;
   "tmux|prefix+g") echo "winmgr mode: h/l swap, j/k prev/next, r rename, n renumber, f menu, q quit" ;;
   "tmux|prefix+?") echo "this cheatsheet" ;;
   *) echo "" ;;

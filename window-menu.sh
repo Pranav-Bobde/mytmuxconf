@@ -11,7 +11,7 @@ TMUX_FZF_BIN="${TMUX_FZF_BIN:-fzf}"
 TMUX_FZF_OPTIONS="${TMUX_FZF_OPTIONS:-}"
 
 FZF_DEFAULT_OPTS="$FZF_DEFAULT_OPTS --header='Select an action.'"
-action=$(printf "switch\nlink\nmove\nswap\nrename\nre-number\nkill\n[cancel]" | eval "$TMUX_FZF_BIN $TMUX_FZF_OPTIONS")
+action=$(printf "switch\nlink\nmove\nswap\nrename\nre-number\nkill\nwallpaper\n[cancel]" | eval "$TMUX_FZF_BIN $TMUX_FZF_OPTIONS")
 
 if [[ -z "$action" || "$action" == "[cancel]" ]]; then
   exit 0
@@ -19,6 +19,9 @@ fi
 
 if [[ "$action" == "re-number" ]]; then
   tmux move-window -r
+elif [[ "$action" == "wallpaper" ]]; then
+  # Own window, not a popup: tmux popups drop the sixel image previews.
+  "$HOME/.config/wezterm/scripts/wallz" --window
 else
   bash "$TMUX_FZF_SCRIPTS/window.sh" "$action"
 fi
