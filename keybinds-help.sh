@@ -15,6 +15,7 @@ describe() {
   "wezterm|cmd+R") echo "nvim :source current file" ;;
   "wezterm|opt+h" | "wezterm|opt+j" | "wezterm|opt+k" | "wezterm|opt+l") echo "passthrough to tmux: pane nav" ;;
   "wezterm|opt+shift+h" | "wezterm|opt+shift+j" | "wezterm|opt+shift+k" | "wezterm|opt+shift+l") echo "passthrough to tmux: pane resize" ;;
+  "tmux|prefix+o") echo "session picker: tab toggles switch/create (popup, cmd+o)" ;;
   "tmux|prefix+K") echo "agent session switcher: claude-code + opencode + Pi (fzf popup, cmd+k)" ;;
   "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (gum popup)" ;;
   "tmux|prefix+B") echo "wallpaper picker" ;;
@@ -98,8 +99,6 @@ wez_binds() {
 extras() {
   printf 'tmux\tprefix+tab\textrakto: fuzzy-pick text from pane\n'
   printf 'tmux\tprefix+u\tfzf-url: open URL from pane\n'
-  sessionx=$(grep -oE "@sessionx-bind '.+'" "$TMUX_CONF" | cut -d"'" -f2)
-  [ -n "$sessionx" ] && printf 'tmux\tprefix+%s\tsessionX session picker\n' "$sessionx"
 }
 
 rows() {

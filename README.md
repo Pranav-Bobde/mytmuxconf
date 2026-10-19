@@ -43,3 +43,17 @@ python3 tests/verify_live.py
 ```
 
 Python tests run the real picker with isolated terminal/process commands and real jq/text tools. Bun tests drive the real extension's lifecycle handlers and inspect its files. Neither suite sends input to existing user sessions.
+
+# Session picker (Cmd+O)
+
+**Cmd+O** in WezTerm (or **prefix+o**) opens `session-picker.sh`: a rounded dim card in the status-bar colors. The border title names the view (`Sessions · switch`), a faint full-width band marks the selected row, and a muted `●` marks attached sessions.
+
+- **switch** (default): existing sessions, most recent first, with window count and folder. Enter switches. Backspace on an empty search deletes the highlighted session after a Yes/No prompt (default No). The last remaining session can't be deleted, since that would stop the tmux server.
+- **create**: zoxide directories, or type a path. Enter creates a session named after the folder, or switches to the session already rooted there (those rows show `●` and the session name).
+- Tab toggles the views, Ctrl+J/K move, Esc closes.
+
+Design notes:
+
+- fzf draws the border (the popup uses `-B`) so Tab can relabel it. Actions read the view back from `$FZF_BORDER_LABEL`.
+- The band is Catppuccin surface0 (`#313244`). Cell backgrounds render opaque over WezTerm's translucent wallpaper; darker shades read as a dark slab where the band crosses the wallpaper's bright areas.
+- macOS `/bin/bash` is 3.2: under `set -u` an empty array is unbound. Expand optional arrays as `${a[@]+"${a[@]}"}`.
