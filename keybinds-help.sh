@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Searchable cheatsheet of custom keybinds across tmux + wezterm.
 # Parses the live configs, so new binds show up automatically.
-# Bound to prefix+? (tmux popup). Run with --list to dump without gum.
+# Bound to prefix+? (tmux popup). Run with --list to dump plain rows.
 set -uo pipefail
+
+# shellcheck source=popup-theme.sh
+. "$(cd "$(dirname "$0")" && pwd)/popup-theme.sh"
 
 TMUX_CONF="$HOME/.config/tmux/tmux.conf"
 WEZ_CONF="$HOME/.config/wezterm/wezterm.lua"
@@ -17,8 +20,8 @@ describe() {
   "wezterm|opt+shift+h" | "wezterm|opt+shift+j" | "wezterm|opt+shift+k" | "wezterm|opt+shift+l") echo "passthrough to tmux: pane resize" ;;
   "tmux|prefix+o") echo "session picker: tab toggles switch/create (popup, cmd+o)" ;;
   "tmux|prefix+K") echo "agent session switcher: claude-code + opencode + Pi (fzf popup, cmd+k)" ;;
-  "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (gum popup)" ;;
-  "tmux|prefix+a") echo "sesh session picker (gum popup)" ;;
+  "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (popup)" ;;
+  "tmux|prefix+a") echo "sesh picker (popup)" ;;
   "tmux|prefix+P") echo "toggle directory path in status bar" ;;
   "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf): switch, move, rename, kill, wallpaper" ;;
   "tmux|prefix+g") echo "winmgr mode: h/l swap, j/k prev/next, r rename, n renumber, f menu, q quit" ;;
@@ -100,7 +103,8 @@ extras() {
   printf 'tmux\tprefix+u\tfzf-url: open URL from pane\n'
 }
 
-rows() {
+# Sorted, deduped "src<TAB>key<TAB>action" rows. Shared by --list and the card.
+binds() {
   {
     tmux_binds
     wez_binds
@@ -109,11 +113,34 @@ rows() {
     o=$(describe "$src|$key")
     [ -n "$o" ] && act=$o
     printf '%s\t%s\t%s\n' "$src" "$key" "$act"
-  done | sort -t$'\t' -k1,1 -k2,2 | uniq | column -t -s$'\t'
+  done | sort -t$'\t' -k1,1 -k2,2 | uniq
+}
+
+# --list: plain text, column-aligned. Output must not change.
+rows() {
+  binds | column -t -s$'\t'
+}
+
+# Card rows: ANSI colors. column -t counts escape bytes as width, so pad the
+# plain text in awk first, then wrap the padded text in color.
+card_rows() {
+  binds | awk -F'\t' -v faint="$C_FAINT" -v dim="$C_DIM" -v r="$C_OFF" '
+    { s[NR] = $1; k[NR] = $2; a[NR] = $3
+      if (length($1) > ms) ms = length($1)
+      if (length($2) > mk) mk = length($2) }
+    END { for (i = 1; i <= NR; i++)
+      printf "%s%-*s%s  %s%-*s%s  %s\n", faint, ms, s[i], r, dim, mk, k[i], r, a[i] }'
+}
+
+card() {
+  card_rows | fzf "${POPUP_FZF_OPTS[@]}" \
+    --border-label "$(popup_label Keybinds)" \
+    --header 'type to filter   esc close' \
+    --no-sort >/dev/null || true
 }
 
 if [ "${1:-}" = "--list" ]; then
   rows
 else
-  rows | gum filter --no-limit --height 100 --placeholder 'search keybinds…' --prompt='  ' >/dev/null || true
+  card
 fi

@@ -34,8 +34,10 @@ OC_DB="$HOME/.local/share/opencode/opencode.db"
 PI_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-agent-switcher/pi"
 
 KINDS=(all cc oc pi)
-NAMES=(All Claude OpenCode Pi)
-PROMPTS=('  all ❯ ' '  claude ❯ ' '  opencode ❯ ' '  pi ❯ ')
+TABS=(all claude opencode pi)
+
+# shellcheck source=popup-theme.sh
+. "$(cd "$(dirname "$0")" && pwd)/popup-theme.sh"
 
 ocq() { sqlite3 -readonly -separator $'\t' "$OC_DB" "$@" 2>/dev/null; }
 sqlstr() { local s=${1//\'/\'\'}; printf "'%s'" "$s"; }
@@ -122,22 +124,23 @@ filter_rows() {
   awk -F'\t' -v k="$1" 'k == "all" || $1 == k' "$SWITCHER_ROWS"
 }
 
+# Border title: "Agents · all · claude · opencode · pi", the active tab one grey
+# step brighter (the card's view-name style, see popup-theme.sh).
 tab_label() {
-  local active=$1 i out=""
+  local active=$1 i out=" ${C_DIM}Agents"
   for i in "${!KINDS[@]}"; do
-    local n style=$'\033[2m'
-    n=$(filter_rows "${KINDS[i]}" | wc -l | tr -d ' ')
-    (( i == active )) && style=$'\033[1;30;45m'
-    out+="$style $((i + 1)) ${NAMES[i]} $n "$'\033[0m '
+    out+=" ${C_DIM}· "
+    if (( i == active )); then out+="$C_MODE"; else out+="$C_FAINT"; fi
+    out+="${TABS[i]}"
   done
-  printf ' %s' "$out"
+  printf '%s %s' "$out" "$C_OFF"
 }
 
 tab_action() {
   local i=$1
   echo "$i" >"$SWITCHER_STATE"
-  printf 'reload-sync(%s --rows %s)+first+change-prompt(%s)+change-border-label(%s)' \
-    "$SELF" "${KINDS[i]}" "${PROMPTS[i]}" "$(tab_label "$i")"
+  printf 'reload-sync(%s --rows %s)+first+change-border-label(%s)' \
+    "$SELF" "${KINDS[i]}" "$(tab_label "$i")"
 }
 
 case "${1:-}" in
@@ -210,10 +213,10 @@ clean_title() {
   printf '%s' "$1" | tr -d '\000-\010\013-\037\177' | tr '\t\n' '  '
 }
 
-TAG_CC=$'\033[38;5;173mcc\033[0m'
-TAG_OC=$'\033[38;5;110moc\033[0m'
-TAG_PI=$'\033[38;5;141mpi\033[0m'
-BUSY=$'\033[1;33m●\033[0m'
+TAG_CC="${C_FAINT}cc$C_OFF"
+TAG_OC="${C_FAINT}oc$C_OFF"
+TAG_PI="${C_FAINT}pi$C_OFF"
+BUSY="${C_WARM}●$C_OFF"
 
 # rows: kind \t updated \t paneid \t sid \t display \t cwd
 rows=""
@@ -248,7 +251,7 @@ for f in "$SESS_DIR"/*.json; do
 
   st=' '
   [[ "$status" == "busy" ]] && st="$BUSY"
-  display=$(printf '%s %s \033[1m%s\033[0m' "$st" "$TAG_CC" "$title")
+  display=$(printf '%s %s %s' "$st" "$TAG_CC" "$title")
   rows+="cc"$'\t'"$updated"$'\t'"$paneid"$'\t'"$sid"$'\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
 done
 
@@ -283,7 +286,7 @@ if [[ -n "$OC_PANES" && -r "$OC_DB" ]] && command -v sqlite3 >/dev/null; then
       updated="${updated:-0}"
     fi
 
-    display=$(printf '%s %s \033[1m%s\033[0m' "$st" "$TAG_OC" "$title")
+    display=$(printf '%s %s %s' "$st" "$TAG_OC" "$title")
     rows+="oc"$'\t'"$updated"$'\t'"$paneid"$'\t'"${sid:-}"$'\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
   done <<<"${OC_PANES%$'\n'}"
 fi
@@ -312,7 +315,7 @@ for f in "$PI_DIR"/*.json; do
   PI_SEEN+="$paneid|"
   st=' '
   [[ "$status" == "busy" ]] && st="$BUSY"
-  display=$(printf '%s %s \033[1m%s\033[0m' "$st" "$TAG_PI" "$(clean_title "$title")")
+  display=$(printf '%s %s %s' "$st" "$TAG_PI" "$(clean_title "$title")")
   # Pi field 4 is the metadata reference, which includes the exact file + leaf.
   rows+="pi"$'\t'"$updated"$'\t'"$paneid"$'\t'"$f"$'\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
 done
@@ -328,13 +331,13 @@ if [[ -n "$PI_PANES" ]]; then
     ' || continue
     title="${title#π - }"
     [[ -n "$title" ]] || title="(Pi session)"
-    display=$(printf '  %s \033[1m%s\033[0m' "$TAG_PI" "$(clean_title "$title")")
+    display=$(printf '  %s %s' "$TAG_PI" "$(clean_title "$title")")
     rows+="pi"$'\t'"0"$'\t'"$paneid"$'\t\t'"$display"$'\t'"$(short_path "$cwd")"$'\n'
   done <<<"${PI_PANES%$'\n'}"
 fi
 
-# most recently interacted first — fzf's default layout puts the first row at
-# the bottom, right next to the search bar
+# most recently interacted first — the card's reverse layout puts the first row
+# at the top, right under the search bar
 rows=$(printf '%s' "$rows" | sort -t$'\t' -k2,2nr)
 
 if [[ -z "$rows" ]]; then
@@ -363,27 +366,21 @@ case "$from_kind" in
 esac
 echo "$tab" >"$SWITCHER_STATE"
 
-sel=$("$SELF" --rows "${KINDS[tab]}" | fzf \
-  --ansi \
+sel=$("$SELF" --rows "${KINDS[tab]}" | fzf "${POPUP_FZF_OPTS[@]}" \
   --delimiter=$'\t' \
   --with-nth=5 \
   --no-sort \
-  --prompt="${PROMPTS[tab]}" \
-  --border=top \
   --border-label="$(tab_label "$tab")" \
-  --border-label-pos=1 \
+  --header="1-4 or tab  change tab   ↵ jump    $(popup_dot busy)" \
   --bind="1:transform($SELF --key 1)" \
   --bind="2:transform($SELF --key 2)" \
   --bind="3:transform($SELF --key 3)" \
   --bind="4:transform($SELF --key 4)" \
   --bind="tab:transform($SELF --tab next)" \
   --bind="shift-tab:transform($SELF --tab prev)" \
-  --bind='focus:transform-header(echo wd: {6})' \
-  --bind='result:transform-header(echo wd: {6})' \
-  --header-first \
+  --bind='focus:transform-preview-label(echo " {6} ")' \
   --preview="$SELF --preview {1} {4}" \
-  --preview-window='down,60%,wrap,follow' \
-  --color='pointer:magenta,header:blue:underline,border:bright-black')
+  --preview-window='down,60%,wrap,follow,border-top')
 
 [[ -z "$sel" ]] && exit 0
 paneid=$(cut -f3 <<<"$sel")

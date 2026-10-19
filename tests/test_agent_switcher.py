@@ -17,6 +17,15 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / "agent-switcher.sh"
 
 
+
+# The active tab is the one drawn in the card's brighter view-name color
+# (C_MODE in popup-theme.sh) inside the border label.
+ACTIVE_TAB = "\033[38;2;166;173;200m"
+
+
+def border_label(args):
+    return next(a for a in args if a.startswith("--border-label="))
+
 class TabTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -49,7 +58,7 @@ class TabTests(unittest.TestCase):
         action = self.run_script("--tab", "next")
         self.assertEqual(self.state.read_text().strip(), "3")
         self.assertIn("--rows pi", action)
-        self.assertIn("4 Pi 1", action)
+        self.assertIn(ACTIVE_TAB + "pi", action)
 
     def test_next_from_pi_wraps_to_all(self):
         self.state.write_text("3\n")
@@ -66,7 +75,7 @@ class TabTests(unittest.TestCase):
         action = self.run_script("--key", "4")
         self.assertEqual(self.state.read_text().strip(), "3")
         self.assertIn("--rows pi", action)
-        self.assertIn("4 Pi 1", action)
+        self.assertIn(ACTIVE_TAB + "pi", action)
 
     def test_four_is_search_text_for_nonempty_query(self):
         self.state.write_text("1\n")
@@ -264,7 +273,7 @@ if os.environ.get("PICKER_SELECT"):
         self.run_script()
         self.assertTrue((self.root / "fixture.json.fzf").exists(), "Pi candidates should open fzf")
         captured = json.loads((self.root / "fixture.json.fzf").read_text())
-        self.assertIn("--prompt=  pi ❯ ", captured["args"])
+        self.assertIn(ACTIVE_TAB + "pi", border_label(captured["args"]))
         self.assertTrue(any(arg.startswith("--bind=4:transform(") for arg in captured["args"]))
         self.assertTrue(captured["rows"].startswith("pi\t"))
 
@@ -369,7 +378,7 @@ sys.exit(result.returncode)
         self.env["SWITCHER_FROM"] = "%8"
         self.run_script()
         captured = json.loads((self.root / "fixture.json.fzf").read_text())
-        self.assertIn("--prompt=  opencode ❯ ", captured["args"])
+        self.assertIn(ACTIVE_TAB + "opencode", border_label(captured["args"]))
         self.assertTrue(captured["rows"].startswith("oc\t"))
         self.assertNotIn("pi\t", captured["rows"])
 

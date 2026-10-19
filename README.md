@@ -58,6 +58,24 @@ Design notes:
 - The band is Catppuccin surface0 (`#313244`). Cell backgrounds render opaque over WezTerm's translucent wallpaper; darker shades read as a dark slab where the band crosses the wallpaper's bright areas.
 - macOS `/bin/bash` is 3.2: under `set -u` an empty array is unbound. Expand optional arrays as `${a[@]+"${a[@]}"}`.
 
+# Popup look
+
+Every popup shares one "card" look from `popup-theme.sh`: a rounded dim border whose title names the popup and its current view, a dim `›` prompt, a counter line, dim hints, a faint full-width band on the selected row, and a muted peach `●` as the only warm accent. Scripts source the file and pass `"${POPUP_FZF_OPTS[@]}"` to fzf, with `popup_label Title view` for the border title.
+
+| Popup | Key | Script |
+|---|---|---|
+| Sessions | Cmd+O, prefix+o | `session-picker.sh` (reference implementation) |
+| Agents | Cmd+K, prefix+K | `agent-switcher.sh`: the title shows the tabs and counts, with the active tab brighter |
+| Keybinds | prefix+? | `keybinds-help.sh` |
+| Sesh | prefix+a | `sesh-picker.sh` |
+| Rename window | prefix+R, winmgr r | `rename-window.sh`: gum input in a tmux-drawn card |
+| Window menu and sub-pickers | prefix+w/W, winmgr f | `window-menu.sh` sets tmux-fzf's `TMUX_FZF_OPTIONS` |
+| URLs | prefix+u | `popup-plugins.sh` sets `@fzf-url-fzf-options` |
+| Extract | prefix+tab | `popup-plugins.sh` points `@extrakto_fzf_tool` at `extrakto-fzf.sh` |
+| tmux menus | right-click, prefix+< / > | `menu-*` styles in `tmux.conf` |
+
+fzf draws the border (popups use `-B`, and `fzf-tmux -p` does the same). `tmux.conf` sets `popup-border-lines none` because extrakto can't pass `-B`. fzf runs transform/execute actions through `$SHELL` (zsh), so a `~/.zshenv` that prints output would break them.
+
 # Status bar
 
 The bar sits at the bottom with plain text on the terminal background: dim grey windows, the current one with a peach number and bold name, the session name on the right. Catppuccin was removed; `tmux.conf` hardcodes the six Mocha colors it used to set (messages, copy mode, pane borders, clock). `status-right` must keep continuum's `#(continuum_save.sh)` hook, or autosave stops.

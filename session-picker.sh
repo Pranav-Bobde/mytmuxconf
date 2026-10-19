@@ -17,22 +17,15 @@
 set -u
 
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-# Catppuccin Mocha. Emphasis stays low: rows and selection are one or two grey
-# steps apart, and the only warm color is a muted peach for attached sessions.
-# BAND is surface0, the theme's selection color. Cell backgrounds render
-# opaque over WezTerm's translucent wallpaper, and darker shades (base,
-# #1e1e2e) read as a dark slab where the band crosses the bright silhouette.
-DIM='#6c7086' FAINT='#585b70' ROW='#7f849c' SEL='#bac2de' TEXT='#cdd6f4' BAND='#313244' SURF='#45475a' WARM='#c99a7c'
-THEME="fg:$ROW,fg+:$SEL:regular,bg:-1,bg+:$BAND,hl:$WARM,hl+:$WARM,pointer:$DIM,prompt:$DIM,query:$TEXT,info:$FAINT,header:$DIM,border:$BAND,label:$DIM,gutter:-1,separator:$BAND,scrollbar:$BAND"
-# 24-bit ANSI for row and label text, matching the palette above.
-C_WARM=$'\033[38;2;201;154;124m' C_FAINT=$'\033[38;2;88;91;112m' C_DIM=$'\033[38;2;108;112;134m' C_MODE=$'\033[38;2;166;173;200m' C_OFF=$'\033[0m'
+# shellcheck source=popup-theme.sh
+. "$(dirname "$self")/popup-theme.sh"
 
 # The border label names the view, and actions read it back from
 # $FZF_BORDER_LABEL to know which view they run in.
-LABEL_SWITCH=" ${C_DIM}Sessions · ${C_MODE}switch${C_OFF} "
-LABEL_CREATE=" ${C_DIM}Sessions · ${C_MODE}create${C_OFF} "
-HINT_SWITCH="↵ switch   ⌫ delete   tab → create    ${C_WARM}●${C_OFF} attached"
-HINT_CREATE="↵ create or switch   tab → switch    ${C_WARM}●${C_OFF} has a session"
+LABEL_SWITCH="$(popup_label Sessions switch)"
+LABEL_CREATE="$(popup_label Sessions create)"
+HINT_SWITCH="↵ switch   ⌫ delete   tab → create    $(popup_dot attached)"
+HINT_CREATE="↵ create or switch   tab → switch    $(popup_dot 'has a session')"
 
 # Rows in both views are "value<TAB>display": fzf shows only the display
 # column (--with-nth 2..), while {1} gives actions the raw session name or path.
@@ -66,21 +59,14 @@ expand() {
 	esac
 }
 
-say_error() {
-	gum style --foreground 203 "$1"
-	sleep 1.2
-}
-
 delete() {
 	local name="$1"
 	[ -n "$name" ] || return
 	if [ "$(tmux list-sessions | wc -l)" -le 1 ]; then
-		say_error "'$name' is the only session. Not deleting it."
+		popup_error "'$name' is the only session. Not deleting it."
 		return
 	fi
-	gum confirm "Delete session '$name'?" --default=false --affirmative=Yes --negative=No \
-		--prompt.foreground "$SEL" --selected.background "$SURF" --selected.foreground "$TEXT" \
-		--unselected.background "$BAND" --unselected.foreground "$DIM" &&
+	gum confirm "Delete session '$name'?" --default=false --affirmative=Yes --negative=No &&
 		tmux kill-session -t "=$name"
 }
 
@@ -124,7 +110,7 @@ enter() {
 	esac
 	[ -n "$dir" ] && [ -d "$dir" ] || dir="$(expand "$pick")"
 	if [ -z "$dir" ] || ! create "$client" "$dir"; then
-		say_error "Not a directory: ${query:-$pick}"
+		popup_error "Not a directory: ${query:-$pick}"
 	fi
 }
 
@@ -145,21 +131,9 @@ picker() {
 	else
 		echo backward-delete-char
 	fi"
-	"$list" | fzf \
-		--ansi \
-		--layout reverse \
-		--border rounded \
+	"$list" | fzf "${POPUP_FZF_OPTS[@]}" \
 		--border-label "$label" \
-		--border-label-pos 3 \
-		--prompt '› ' \
-		--info default \
-		--separator '─' \
 		--header "$hints" \
-		--color "$THEME" \
-		--highlight-line \
-		--pointer ' ' \
-		--gutter ' ' \
-		--no-scrollbar \
 		--delimiter '\t' \
 		--with-nth 2.. \
 		--no-sort \
