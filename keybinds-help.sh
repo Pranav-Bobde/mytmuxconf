@@ -23,7 +23,7 @@ describe() {
   "tmux|prefix+R" | "tmux|prefix+g r") echo "rename window (popup)" ;;
   "tmux|prefix+a") echo "sesh picker (popup)" ;;
   "tmux|prefix+P") echo "toggle directory path in status bar" ;;
-  "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf): switch, move, rename, kill, wallpaper" ;;
+  "tmux|prefix+w" | "tmux|prefix+W" | "tmux|prefix+g f") echo "window menu (fzf): switch, move pane, swap, rename, kill, wallpaper" ;;
   "tmux|prefix+g") echo "winmgr mode: h/l swap, j/k prev/next, r rename, n renumber, f menu, q quit" ;;
   "tmux|prefix+?") echo "this cheatsheet" ;;
   *) echo "" ;;
