@@ -240,12 +240,14 @@ for f in "$SESS_DIR"/*.json; do
   done
   [[ -z "$paneid" ]] && continue
 
-  # real thread title: latest ai-title entry in transcript (set by claude's
-  # auto-titling and /rename). fall back to the short derived name.
+  # real thread title from the transcript: the latest /rename (custom-title)
+  # wins, since claude keeps appending ai-title entries after a rename; then
+  # the latest auto title (ai-title); then the short derived name.
   title="$name"
   tf=$(ls "$PROJECTS_DIR"/*/"$sid".jsonl 2>/dev/null | head -1)
   if [[ -n "$tf" ]]; then
-    t=$(grep '"type":"ai-title"' "$tf" 2>/dev/null | tail -1 | jq -r '.aiTitle // empty' 2>/dev/null)
+    t=$(grep '"type":"custom-title"' "$tf" 2>/dev/null | tail -1 | jq -r '.customTitle // empty' 2>/dev/null)
+    [[ -z "$t" ]] && t=$(grep '"type":"ai-title"' "$tf" 2>/dev/null | tail -1 | jq -r '.aiTitle // empty' 2>/dev/null)
     [[ -n "$t" ]] && title="$t"
   fi
 

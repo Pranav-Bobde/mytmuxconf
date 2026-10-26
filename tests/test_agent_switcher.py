@@ -405,6 +405,15 @@ sys.exit(result.returncode)
         self.assertIn("Claude request", preview)
         self.assertIn("Claude answer", preview)
 
+        # /rename writes custom-title, and claude keeps appending ai-title
+        # entries afterwards; the rename must still win.
+        with (project / "cc-id.jsonl").open("a") as transcript:
+            transcript.write('\n{"type":"custom-title","customTitle":"renamed-task"}'
+                             '\n{"type":"ai-title","aiTitle":"Later auto title"}')
+        rows = self.list_rows()
+        self.assertIn("renamed-task", rows[0][4])
+        self.assertNotIn("Later auto title", rows[0][4])
+
 
 if __name__ == "__main__":
     unittest.main()
