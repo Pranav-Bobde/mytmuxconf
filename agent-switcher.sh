@@ -368,10 +368,16 @@ case "$from_kind" in
 esac
 echo "$tab" >"$SWITCHER_STATE"
 
+# initial row: the invoking pane's own session, else the first row. --sync
+# makes fzf read all rows before the start event, so pos() can land on it.
+row=$(filter_rows "${KINDS[tab]}" | awk -F'\t' -v p="$FROM_PANE" '$3 == p { print NR; exit }')
+
 sel=$("$SELF" --rows "${KINDS[tab]}" | fzf "${POPUP_FZF_OPTS[@]}" \
   --delimiter=$'\t' \
   --with-nth=5 \
   --no-sort \
+  --sync \
+  --bind="start:pos(${row:-1})" \
   --border-label="$(tab_label "$tab")" \
   --header="1-4 or tab  change tab   ↵ jump    $(popup_dot busy)" \
   --bind="1:transform($SELF --key 1)" \

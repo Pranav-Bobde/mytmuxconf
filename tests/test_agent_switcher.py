@@ -267,6 +267,12 @@ if os.environ.get("PICKER_SELECT"):
         rows = self.list_rows()
         self.assertEqual([(r[2], r[3]) for r in rows], [("%8", str(second)), ("%7", str(first))])
 
+        # Opened from %7 (second row), the cursor starts on that session.
+        self.env["SWITCHER_FROM"] = "%7"
+        self.run_script()
+        captured = json.loads((self.root / "fixture.json.fzf").read_text())
+        self.assertIn("--bind=start:pos(2)", captured["args"])
+
     def test_pi_pane_opens_the_pi_tab_with_four_binding(self):
         self.pane()
         self.metadata()
