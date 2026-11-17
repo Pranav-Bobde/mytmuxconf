@@ -97,7 +97,7 @@ Install (the binary is built locally and git-ignored; the plist lives in `launch
 
 ```bash
 swiftc -O -o ~/.config/tmux/cmd-hold-watch ~/.config/tmux/cmd-hold-watch.swift
-cp ~/.config/tmux/launchd/xyz.pranavb.tmux-cmd-hold.plist ~/Library/LaunchAgents/
+sed "s|__HOME__|$HOME|" ~/.config/tmux/launchd/xyz.pranavb.tmux-cmd-hold.plist > ~/Library/LaunchAgents/xyz.pranavb.tmux-cmd-hold.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/xyz.pranavb.tmux-cmd-hold.plist
 ```
 
